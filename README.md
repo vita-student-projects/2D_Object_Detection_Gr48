@@ -36,6 +36,8 @@ In order to run the visualization of the Cityscapes dataset with boxes you may r
 ```
 python conv/vizualize2.py
 ```
+## Input 1
+![vis1](Retinanet/results/gt1.png "Cityscapes in bbox format")
 ## Output 1
 ![vis1](Retinanet/results/res1.png "Cityscapes in bbox format")
 
