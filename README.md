@@ -22,19 +22,19 @@ requirements1.txt
 ```
 ## Installation of the requirements for the data segmentation conversion to box
 ```
-pip install -r conv/requirements1.txt 
+!pip install -r Retinanet/conv/requirements1.txt 
 ```
 
 
 ## Run the bbox on the Cityscapes
 To run the conversion execute the following
 ```
-!python conv/main.py --dataset cityscapes --datadir conv/data/cityscapes --outdir conv/data/cityscapes/annotations
+!python Retinanet/conv/main.py --datadir Retinanet/conv/data/cityscapes --outdir Retinanet/conv/data/cityscapes/annotations
 ```
 
 In order to run the visualization of the Cityscapes dataset with boxes you may run
 ```
-python conv/vizualize2.py
+!python Retinanet/conv/vizubbox.py
 ```
 ## Input 1 - Segmentation
 ![vis1](Retinanet/results/gt1.png "Cityscapes in bbox format")
@@ -43,18 +43,18 @@ python conv/vizualize2.py
 
 ## Installation of the requirements for the model
 ```
-pip install -r requirements2.txt 
+!pip install -r Retinanet/requirements2.txt 
 ```
 
 ## Run the Retinanet model
-To run the model execute
+To run the model execute (you might have to uncomment the model)
 ```
-python main_model.py
+!python Retinanet/main_model.py
 ```
 
 In order to run the visualization of Cityscapes prediction please launch run the command:
 ```
-python vizualization.py
+!python Retinanet/vizualization.py
 ```
 note: Due to computation issues the weights that are used have been computed on the initial dateset
 
