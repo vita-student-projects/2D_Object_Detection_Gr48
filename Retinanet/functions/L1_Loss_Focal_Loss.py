@@ -1,5 +1,6 @@
 ## Implementing Smooth L1 loss and Focal Loss as keras custom losses
-
+import tensorflow as tf
+from tensorflow import keras
 
 class RetinaNetBoxLoss(tf.losses.Loss):
     """Implements Smooth L1 loss"""
@@ -46,7 +47,7 @@ class RetinaNetClassificationLoss(tf.losses.Loss):
 class RetinaNetLoss(tf.losses.Loss):
     """Wrapper to combine both the losses"""
 
-    def __init__(self, num_classes=15, alpha=0.25, gamma=2.0, delta=1.0):
+    def __init__(self, num_classes=80, alpha=0.25, gamma=2.0, delta=1.0):
         super().__init__(reduction="auto", name="RetinaNetLoss")
         self._clf_loss = RetinaNetClassificationLoss(alpha, gamma)
         self._box_loss = RetinaNetBoxLoss(delta)

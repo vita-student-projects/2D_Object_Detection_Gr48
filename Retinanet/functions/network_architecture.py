@@ -1,4 +1,6 @@
 ## Building Feature Pyramid Network as a custom layer
+import tensorflow as tf
+from tensorflow import keras
 
 class FeaturePyramid(keras.layers.Layer):
     """Builds the Feature Pyramid with the feature maps from the backbone.

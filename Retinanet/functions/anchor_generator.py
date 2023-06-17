@@ -6,6 +6,8 @@
 #and height of the anchor box to predict a relative scale of the object. In the
 #case of RetinaNet, each location on a given feature map has nine anchor boxes
 #(at three scales and three ratios).
+import tensorflow as tf
+from tensorflow import keras
 
 class AnchorBox:
     """Generates anchor boxes.

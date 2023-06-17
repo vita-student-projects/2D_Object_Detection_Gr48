@@ -1,36 +1,392 @@
-## Loading weights
-## Building inference model
+## Generating detections
 
-weights_dir = 'w_coco_on_Cityscapes/'
+# Object Detection with RetinaNet
+
+#**Author:**  TomProud & Yasser388 inspired by the work of Srihari Humbarwadi
+
+#**Description:**  Implementing RetinaNet: Focal Loss for Dense Object Detection.
+## Introduction
+
+#Inspired from the Object Detection with RetinaNet our ambition is to test the model on a new dataset: Cityscapes. Improve the performance of the model by modifying the backbone and ultimately to modify the model architecture. 
+
+#**References:**
+
+#- [RetinaNet Paper](https://arxiv.org/abs/1708.02002)
+#- [Feature Pyramid Network Paper](https://arxiv.org/abs/1612.03144)
+
+import os
+os.chdir('Retinanet/') 
+import glob
+import json
+
+import numpy as np
+import tensorflow as tf
+import cv2
+from tensorflow import keras
+from tensorflow.keras.callbacks import ModelCheckpoint
+
+import matplotlib.pyplot as plt
+import tensorflow_datasets as tfds
+
+#from functions import anchor_generator
+#from functions import backbone_resnet50 
+#from functions import class_box_heads 
+#from functions import iou 
+#from functions import L1_Loss_Focal_Loss 
+#from functions import network_architecture 
+#from functions import labels 
+#from functions import pred 
+#from functions import preprocessing_data 
+#from functions import retinanet_model 
+#from functions import utility_functions 
+from functions.labels import LabelEncoder
+from functions.backbone_resnet50 import get_backbone
+from functions.L1_Loss_Focal_Loss import RetinaNetLoss
+from functions.retinanet_model import RetinaNet
+from functions.preprocessing_data import preprocess_data 
+from functions.pred import DecodePredictions
+from functions.utility_functions import convert_to_corners
+from functions.iou import visualize_detections
+from functions.backbone_resnet50 import get_backbone
+from functions.preprocessing_data import resize_and_pad_image
+
+##label
+
+label_id_name_mapping = {
+    
+    1: 'none',
+    2: 'person',
+    3: 'rider',
+    4: 'car',
+    5: 'truck',
+    6: 'bus',
+    7: 'train',
+    8: 'motorcycle',
+    9: 'bicycle',       
+   10: 'traffic light',
+   11: 'traffic sign',
+   12: 'caravan',
+   13: 'license plate',
+	 14: 'train',
+}
+
+
+## Setting up training parameters
+
+model_dir = "Wheight/"
+label_encoder = LabelEncoder()
+
+num_classes = 80
+batch_size = 1
+
+learning_rates = [1e-05, 0.0025, 0.005, 0.01, 0.001, 0.0001]
+learning_rate_boundaries = [100, 200, 400, 200000, 300000]
+learning_rate_fn = tf.optimizers.schedules.PiecewiseConstantDecay(
+    boundaries=learning_rate_boundaries, values=learning_rates
+)
+
+## Initializing and compiling model
+resnet50_backbone = get_backbone()
+loss_fn = RetinaNetLoss(num_classes)
+model = RetinaNet(num_classes, resnet50_backbone)
+
+#Trial optimizer legacy
+from tensorflow.keras.optimizers import legacy
+optimizer = legacy.SGD(learning_rate=0.01)
+
+#Trial optimizer adam
+# optimizer = tf.optimizers.Adam(learning_rate=0.01)
+
+#Trial optimizer SGD
+# optimizer = tf.optimizers.SGD(learning_rate=0.01)
+
+model.compile(loss=loss_fn, optimizer=optimizer)
+
+## Setting up callbacks
+callbacks_list = [
+    tf.keras.callbacks.ModelCheckpoint(
+        filepath=os.path.join(model_dir, "weights" + "_epoch_{epoch}"),
+        monitor="loss",
+        save_best_only=False,
+        save_weights_only=True,
+        verbose=1,
+    )
+]
+
+## Import Cityscapes & Merges Images and .Json file
+
+#Dataset_train & Dataset_val 
+# Read the JSON file
+with open('conv/data/cityscapes/annotations/instancesonly_filtered_gtFine_train.json') as f:
+    data = json.load(f)
+
+images_dir = "conv/data/cityscapes/"
+
+def load_and_preprocess_image(images_dir, file_name):
+    # Construct the full path to the image file
+    image_path = os.path.join(images_dir, file_name)
+    
+    # Read image from file
+    image = tf.io.read_file(image_path)
+    
+    # Decode image to tensor
+    image = tf.image.decode_image(image, channels=3)
+    
+    return image
+
+# Create an empty list to store image data
+image_data = []
+# Iterate over the images in the JSON file
+for image_info in data['images']:
+    # Extract image information
+    file_name = image_info['file_name']
+    image_id = image_info['id']
+    
+    # Load and preprocess the image
+    image = load_and_preprocess_image(images_dir, file_name)
+    
+    # Extract object information for the current image
+    objects = [obj for obj in data['annotations'] if obj['image_id'] == image_id]
+    
+    # Skip images with no bounding boxes
+    if len(objects) == 0:
+        continue
+    
+    areas = np.array([obj['area'] for obj in objects])
+    bboxes = np.array([obj['bbox'] for obj in objects])
+    id_name = np.array([obj['id'] for obj in objects])
+    iscrowd = np.array([obj['iscrowd'] for obj in objects])
+    labels = np.array([obj['category_id'] for obj in objects])
+    
+    # Create a dictionary for the current image
+    image_dict = {
+        'image': image,
+        'image/filename': file_name,
+        'image/id': image_id,
+        'objects': {
+            'area': areas,
+            'bbox': bboxes,
+            'id': id_name,
+            'iscrowd': iscrowd,
+            'label': labels
+        }
+    }
+    
+    # Append the image dictionary to the list
+    image_data.append(image_dict)
+# Create a dataset from the image data
+dataset_train = tf.data.Dataset.from_generator(
+    lambda: image_data,
+    output_signature={
+        'image': tf.TensorSpec(shape=(None,None,3), dtype=tf.uint8),
+        'image/filename': tf.TensorSpec(shape=(), dtype=tf.string),
+        'image/id': tf.TensorSpec(shape=(), dtype=tf.int64),
+        'objects': {
+            'area': tf.TensorSpec(shape=(None,), dtype=tf.int64),
+            'bbox': tf.TensorSpec(shape=(None, 4), dtype=tf.float32),
+            'id': tf.TensorSpec(shape=(None,), dtype=tf.int64),
+            'iscrowd': tf.TensorSpec(shape=(None,), dtype=tf.bool),
+            'label': tf.TensorSpec(shape=(None,), dtype=tf.int64),
+        }
+    }
+)
+
+# Read the JSON file
+with open('conv/data/cityscapes/annotations/instancesonly_filtered_gtFine_val.json') as f:
+    data = json.load(f)
+
+images_dir = "conv/data/cityscapes/"
+
+def load_and_preprocess_image(images_dir, file_name):
+    # Construct the full path to the image file
+    image_path = os.path.join(images_dir, file_name)
+    
+    # Read image from file
+    image = tf.io.read_file(image_path)
+    
+    # Decode image to tensor
+    image = tf.image.decode_image(image, channels=3)
+    
+    return image
+
+# Create an empty list to store image data
+image_data = []
+# Iterate over the images in the JSON file
+for image_info in data['images']:
+    # Extract image information
+    file_name = image_info['file_name']
+    image_id = image_info['id']
+    
+    # Load and preprocess the image
+    image = load_and_preprocess_image(images_dir, file_name)
+    
+    # Extract object information for the current image
+    objects = [obj for obj in data['annotations'] if obj['image_id'] == image_id]
+    
+    # Skip images with no bounding boxes
+    if len(objects) == 0:
+        continue
+    
+    areas = np.array([obj['area'] for obj in objects])
+    bboxes = np.array([obj['bbox'] for obj in objects])
+    id_name = np.array([obj['id'] for obj in objects])
+    iscrowd = np.array([obj['iscrowd'] for obj in objects])
+    labels = np.array([obj['category_id'] for obj in objects])
+    
+    # Create a dictionary for the current image
+    image_dict = {
+        'image': image,
+        'image/filename': file_name,
+        'image/id': image_id,
+        'objects': {
+            'area': areas,
+            'bbox': bboxes,
+            'id': id_name,
+            'iscrowd': iscrowd,
+            'label': labels
+        }
+    }
+    
+    # Append the image dictionary to the list
+    image_data.append(image_dict)
+# Create a dataset from the image data
+dataset_val = tf.data.Dataset.from_generator(
+    lambda: image_data,
+    output_signature={
+        'image': tf.TensorSpec(shape=(None,None,3), dtype=tf.uint8),
+        'image/filename': tf.TensorSpec(shape=(), dtype=tf.string),
+        'image/id': tf.TensorSpec(shape=(), dtype=tf.int64),
+        'objects': {
+            'area': tf.TensorSpec(shape=(None,), dtype=tf.int64),
+            'bbox': tf.TensorSpec(shape=(None, 4), dtype=tf.float32),
+            'id': tf.TensorSpec(shape=(None,), dtype=tf.int64),
+            'iscrowd': tf.TensorSpec(shape=(None,), dtype=tf.bool),
+            'label': tf.TensorSpec(shape=(None,), dtype=tf.int64),
+        }
+    }
+)
+
+
+(train_dataset, val_dataset), dataset_info = tfds.load(
+    "coco/2017", split=["train", "validation"], with_info=True, data_dir="conv/vizubbox-result/data"
+)
+## Setting up a `tf.data` pipeline
+
+#- Apply the preprocessing function to the samples
+#- Create batches with fixed batch size. Since images in the batch can
+#have different dimensions, and can also have different number of
+#objects, we use `padded_batch` to the add the necessary padding to create
+#rectangular tensors
+#- Create targets for each sample in the batch using `LabelEncoder`
+
+train_dataset = dataset_train
+val_dataset = dataset_val
+
+autotune = tf.data.AUTOTUNE
+train_dataset = train_dataset.map(preprocess_data, num_parallel_calls=autotune)
+train_dataset = train_dataset.shuffle(8 * batch_size)
+train_dataset = train_dataset.padded_batch(
+    batch_size=batch_size, padding_values=(0.0, 1e-8, -1), drop_remainder=True
+)
+train_dataset = train_dataset.map(
+    label_encoder.encode_batch, num_parallel_calls=autotune
+)
+train_dataset = train_dataset.apply(tf.data.experimental.ignore_errors())
+train_dataset = train_dataset.prefetch(autotune)
+
+val_dataset = val_dataset.map(preprocess_data, num_parallel_calls=autotune)
+val_dataset = val_dataset.padded_batch(
+    batch_size=1, padding_values=(0.0, 1e-8, -1), drop_remainder=True
+)
+val_dataset = val_dataset.map(label_encoder.encode_batch, num_parallel_calls=autotune)
+val_dataset = val_dataset.apply(tf.data.experimental.ignore_errors())
+val_dataset = val_dataset.prefetch(autotune)
+
+## Training the model
+
+epochs = 1   # Total number of epochs
+
+# Run the training loop
+
+#history = model.fit(
+#    train_dataset.take(1),
+#    validation_data=val_dataset.take(1),
+#    epochs=epochs,
+#    callbacks=callbacks_list,
+#    verbose=1,
+#)
+
+# print(history.history.keys())
+# print(history.history['val_loss'])
+
+
+
+weights_dir = 'conv/vizubbox-result/data'
 latest_checkpoint = tf.train.latest_checkpoint(weights_dir)
 model.load_weights(latest_checkpoint)     
-
 
 image = tf.keras.Input(shape=[None, None, 3], name="image")
 predictions = model(image, training=False)
 detections = DecodePredictions(confidence_threshold=0.5)(image, predictions)
 inference_model = tf.keras.Model(inputs=image, outputs=detections)
 
-
-## Generating detections
-
 def prepare_image(image):
     image, _, ratio = resize_and_pad_image(image, jitter=None)
     image = tf.keras.applications.resnet.preprocess_input(image)
     return tf.expand_dims(image, axis=0), ratio
 
-for sample in dataset_val.take(1):
+val_dataset = tfds.load("coco/2017", split="validation", data_dir="conv/vizubbox-result/data")
+int2str = dataset_info.features["objects"]["label"].int2str
+
+# Create the output folder
+output_folder = "Cityscapes-results"
+os.makedirs(output_folder, exist_ok=True)
+
+counter = 0
+
+# Function to visualize detections on the image
+def visualize_detections(image, boxes, class_names, scores):
+    fig, ax = plt.subplots(1, figsize=(image.shape[1] / 80, image.shape[0] / 80))
+    ax.imshow(image)
+    for box, cls, score in zip(boxes, class_names, scores):
+        xmin, ymin, xmax, ymax = box
+        bbox = plt.Rectangle((xmin, ymin), xmax - xmin, ymax - ymin,
+                             fill=False, edgecolor='red', linewidth=2)
+        ax.add_patch(bbox)
+        caption = f'{cls}: {score:.2f}'  # Format prediction values to two decimal places
+        ax.text(xmin, ymin, caption, color='red', fontsize=10,
+                bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
+    plt.axis('off')
+    ax.set_xlim(0, image.shape[1])
+    ax.set_ylim(image.shape[0], 0)
+
+#IMPORTANT, Numer of images for which you wish to show the prediction
+i = 4 
+for sample in dataset_val.take(i):
     image = tf.cast(sample["image"], dtype=tf.float32)
     input_image, ratio = prepare_image(image)
     detections = inference_model.predict(input_image)
     num_detections = detections.valid_detections[0]
-    print(detections)
     class_names = [
-        label_id_name_mapping[int(x)] for x in detections.nmsed_classes[0][:num_detections]
+        int2str(int(x)) for x in detections.nmsed_classes[0][:num_detections]
     ]
-    visualize_detections(
-        image,
-        detections.nmsed_boxes[0][:num_detections] / ratio,
-        class_names,
-        detections.nmsed_scores[0][:num_detections],
-    )
+    
+    # Convert box coordinates to original image scale
+    boxes = detections.nmsed_boxes[0][:num_detections] / ratio
+
+    # Visualize detections on the original image (without normalization)
+    visualize_detections(tf.cast(image, dtype=tf.uint8), boxes, class_names, detections.nmsed_scores[0][:num_detections])
+
+    # Save the image with bounding box annotations
+    output_path = os.path.join(output_folder, f'detection_{counter}.png')
+    plt.savefig(output_path, bbox_inches='tight', pad_inches=0, transparent=True)
+    plt.close()  # Close the figure to free memory
+
+    # Increment the counter
+    counter += 1
+
+
+
+
+os.chdir(os.path.dirname(os.getcwd()))
+

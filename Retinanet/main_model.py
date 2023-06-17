@@ -24,17 +24,24 @@ from tensorflow.keras.callbacks import ModelCheckpoint
 import matplotlib.pyplot as plt
 import tensorflow_datasets as tfds
 
-from function.anchor_generator import *
-from function.backbone_resnet50 import *
-from function.class_box_heads import *
-from function.iou import *
-from function.L1_Loss_Focal_Loss import *
-from function.network_architecture import *
-from function.labels import *
-from function.pred import *
-from function.preprocessing_data import *
-from function.retinanet_model import *
-from function.utility_functions import *
+from functions import anchor_generator
+from functions import backbone_resnet50 
+from functions import class_box_heads 
+from functions import iou 
+from functions import L1_Loss_Focal_Loss 
+from functions import network_architecture 
+from functions import labels 
+from functions import pred 
+from functions import preprocessing_data 
+from functions import retinanet_model 
+from functions import utility_functions 
+from functions.labels import LabelEncoder
+from functions.backbone_resnet50 import get_backbone
+from functions.L1_Loss_Focal_Loss import RetinaNetLoss
+from functions.retinanet_model import RetinaNet
+from functions.preprocessing_data import preprocess_data 
+from functions.pred import DecodePredictions
+from functions.utility_functions import convert_to_corners
 
 ##label
 
@@ -59,10 +66,10 @@ label_id_name_mapping = {
 
 ## Setting up training parameters
 
-model_dir = "retinanet/"
+model_dir = "vizubbox/"
 label_encoder = LabelEncoder()
 
-num_classes = 15
+num_classes = 80
 batch_size = 1
 
 learning_rates = [1e-05, 0.0025, 0.005, 0.01, 0.001, 0.0001]
@@ -76,8 +83,18 @@ resnet50_backbone = get_backbone()
 loss_fn = RetinaNetLoss(num_classes)
 model = RetinaNet(num_classes, resnet50_backbone)
 
-optimizer = tf.optimizers.Adam(learning_rate=0.01)
+#Trial optimizer legacy
+from tensorflow.keras.optimizers import legacy
+optimizer = legacy.SGD(learning_rate=0.01)
+
+#Trial optimizer adam
+# optimizer = tf.optimizers.Adam(learning_rate=0.01)
+
+#Trial optimizer SGD
+# optimizer = tf.optimizers.SGD(learning_rate=0.01)
+
 model.compile(loss=loss_fn, optimizer=optimizer)
+
 ## Setting up callbacks
 callbacks_list = [
     tf.keras.callbacks.ModelCheckpoint(
@@ -93,10 +110,10 @@ callbacks_list = [
 
 #Dataset_train & Dataset_val 
 # Read the JSON file
-with open('conversion_seg_to_bbox/data/cityscapes/annotations/instancesonly_filtered_gtFine_train.json') as f:
+with open('Retinanet/conv/data/cityscapes/annotations/instancesonly_filtered_gtFine_train.json') as f:
     data = json.load(f)
 
-images_dir = "conversion_seg_to_bbox/data/cityscapes/"
+images_dir = "Retinanet/conv/data/cityscapes/"
 
 def load_and_preprocess_image(images_dir, file_name):
     # Construct the full path to the image file
@@ -112,7 +129,7 @@ def load_and_preprocess_image(images_dir, file_name):
 
 # Create an empty list to store image data
 image_data = []
-
+i=0
 # Iterate over the images in the JSON file
 for image_info in data['images']:
     # Extract image information
@@ -151,7 +168,9 @@ for image_info in data['images']:
     
     # Append the image dictionary to the list
     image_data.append(image_dict)
-
+    if i > 4:
+      break
+      i+=1 
 # Create a dataset from the image data
 dataset_train = tf.data.Dataset.from_generator(
     lambda: image_data,
@@ -175,10 +194,10 @@ import os
 import tensorflow as tf
 
 # Read the JSON file
-with open('conversion_seg_to_bbox/data/cityscapes/annotations/instancesonly_filtered_gtFine_val.json') as f:
+with open('Retinanet/conv/data/cityscapes/annotations/instancesonly_filtered_gtFine_val.json') as f:
     data = json.load(f)
 
-images_dir = "conversion_seg_to_bbox/data/cityscapes/"
+images_dir = "Retinanet/conv/data/cityscapes/"
 
 def load_and_preprocess_image(images_dir, file_name):
     # Construct the full path to the image file
@@ -194,7 +213,7 @@ def load_and_preprocess_image(images_dir, file_name):
 
 # Create an empty list to store image data
 image_data = []
-
+i = 0
 # Iterate over the images in the JSON file
 for image_info in data['images']:
     # Extract image information
@@ -233,7 +252,9 @@ for image_info in data['images']:
     
     # Append the image dictionary to the list
     image_data.append(image_dict)
-
+    if i > 4:
+      break
+      i+=1 
 # Create a dataset from the image data
 dataset_val = tf.data.Dataset.from_generator(
     lambda: image_data,
@@ -288,13 +309,15 @@ val_dataset = val_dataset.prefetch(autotune)
 epochs = 5  # Total number of epochs
 
 # Run the training loop
-history = model.fit(
-    train_dataset.take(100),
-    validation_data=val_dataset.take(50),
-    epochs=epochs,
-    callbacks=callbacks_list,
-    verbose=1,
-)
 
-print(history.history.keys())
-print(history.history['val_loss'])
+# history = model.fit(
+#     train_dataset.take(1),
+#     validation_data=val_dataset.take(1),
+#     epochs=epochs,
+#     callbacks=callbacks_list,
+#     verbose=1,
+# )
+
+# print(history.history.keys())
+# print(history.history['val_loss'])
+

@@ -3,7 +3,8 @@
 #RetinaNet uses a ResNet based backbone, using which a feature pyramid network
 #is constructed. In the example we use ResNet50 as the backbone, and return the
 #feature maps at strides 8, 16 and 32.
-
+import tensorflow as tf
+from tensorflow import keras
 
 def get_backbone():
     """Builds ResNet50 with pre-trained imagenet weights"""

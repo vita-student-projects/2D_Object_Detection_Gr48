@@ -1,5 +1,10 @@
 
 ## Implementing a custom layer to decode predictions
+import tensorflow as tf
+from tensorflow import keras
+from functions.anchor_generator import AnchorBox
+from functions.utility_functions import convert_to_corners
+
 
 class DecodePredictions(tf.keras.layers.Layer):
     """A Keras layer that decodes predictions of the RetinaNet model.
@@ -19,7 +24,7 @@ class DecodePredictions(tf.keras.layers.Layer):
 
     def __init__(
         self,
-        num_classes=15,
+        num_classes=80,
         confidence_threshold=0.05,
         nms_iou_threshold=0.5,
         max_detections_per_class=100,
