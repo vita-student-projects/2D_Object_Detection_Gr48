@@ -59,4 +59,4 @@ In order to run the visualization of Cityscapes prediction please launch run the
 note: Due to computation issues the weights that are used have been computed on the initial dateset
 
 ## Output 2
-![vis1](Retinanet/results/res2.png "Cityscapes wheigth CoCo results_1") ![vis2](Retinanet/results/res3.png "Cityscapes wheigth CoCo results_2")![vis1](Retinanet/results/res4.png "Cityscapes wheigth CoCo results_3") ![vis2](Retinanet/results/res5.png "Cityscapes wheigth CoCo results_4")
+![vis1](Retinanet/results/res2.png "Cityscapes wheigth CoCo results_1") ![vis2](Retinanet/results/res5.png "Cityscapes wheigth CoCo results_4")
