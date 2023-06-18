@@ -20,7 +20,18 @@ main.py
 inspect_coco.py
 requirements1.txt
 ```
+
+## You should run the code provided from a iypnb create in the same repo as Retinanet see below (here called main.ipynb)
+```
+
+Retinanet/
+README.md
+main.iypnb
+
+```
+
 ## Installation of the requirements for the data segmentation conversion to box
+
 ```
 !pip install -r Retinanet/conv/requirements1.txt 
 ```
